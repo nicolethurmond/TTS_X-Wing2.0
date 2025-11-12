@@ -344,6 +344,8 @@ XW_cmd.Process = function(obj, cmd)
         AIModule.EnableStrikeAI(obj, cmd)
     elseif type == 'AI' then
         AIModule.EnableAI(obj, cmd)
+    elseif type == 'FleeAI' then
+        AIModule.EnableFleeAI(obj, cmd)
     elseif type == 'rotate' then
         DialModule.RotateArc(obj, cmd)
     elseif type == 'turretarc' then
@@ -422,6 +424,8 @@ XW_cmd.AddCommand('init[ ]?[01234567]', 'changeInitiative')
 debug_AI = false
 AIModule = {}
 
+AIModule.HOTAC_MAT_GUID = "79e109"
+
 -- 2000mm is the length between opposite corners of an epic table.
 AIModule.max_distance = 2000
 
@@ -446,11 +450,10 @@ AIModule.current_move.Reset = function()
 end
 AIModule.current_move.Reset()
 
-
-
 -- Possible commands supported by the AI module
 XW_cmd.AddCommand('ai', 'AI')                    -- Enables the AI on the selected ship
 XW_cmd.AddCommand('[sS]trike[ ]*.*', 'StrikeAI') -- List of Strike AI Targets
+XW_cmd.AddCommand('[fF]lee', 'FleeAI')           -- Enable flee AI behavior on selected ship
 
 -- Description function to add the AI functions to a ship
 AIModule.EnableAI = function(ship, command)
@@ -498,6 +501,23 @@ AIModule.EnableStrikeAI = function(ship, cmd)
         printToAll("Invalid format or no targets specified.", Color.Yellow)
         ship.setTable('StrikeTargets', nil)
     end
+end
+
+AIModule.EnableFleeAI = function(ship, cmd)
+    print("EnableFleeAI called for " .. ship.getName(), color(1.0, 0.0, 0.0, 0.9))
+
+    -- Make sure the ship has AI enabled
+    if not ship.getVar('isAi') then
+        ship.setVar('isAi', true)
+        ship.call('initContextMenu')  -- Refresh context menu to show AI options
+    end
+
+    -- Set the flee flag
+    ship.setVar('isFleeing', true)
+
+    printToAll(ship.getName() .. " is now FLEEING!", color(1.0, 1.0, 0.2, 0.9))
+
+    ship.setDescription('')  -- Clear the description
 end
 
 -- Sanity check, make sure that all the moves for this ship are actually
@@ -733,10 +753,25 @@ end
 
 The maneuver selection is the main submodule of the AI, as well as the one that
 ties most of the others together. It is home to one of the entry points,
-"PerformAIManever". The main function, AIModule.PerformManeuver, uses the
+"PerformAIManeuver". The main function, AIModule.PerformManeuver, uses the
 target selection functions to pick a target, then plots a maneuver based on
-the move tables in BehaviourDB.ttslua. It also cover stress, ion, and obstacle
+the move tables in BehaviourDB.ttslua. It also covers stress, ion, and obstacle
 avoidance.
+
+Flee behavior: Ships with flee behavior (triggered by flee tokens or low health)
+use AIModule.PerformFleeManeuver instead of normal AI. Flee AI supports two modes:
+    Hyperdrive: Ships accumulate hypercharge tokens by rolling 2d2 each turn. Once
+        3 tokens are accumulated, the ship jumps to hyperspace (moves to board edge).
+        If the board edge is within Range 2 in the front arc, the ship flies straight
+        at maximum speed instead of charging.
+    Default flee: Ships without hyperdrive navigate toward the nearest board edge
+        using the standard move tables, always selecting the fastest available maneuver
+        in the appropriate arc. K-turns are avoided when possible to prevent oscillation.
+
+Board edge detection: Helper functions determine board edges by querying the playmat
+object bounds. Functions include finding the edge directly ahead (for hyperspace
+jumps), finding the nearest edge point (for flee navigation), and checking if an
+edge is within a specified range and arc.
 
 Worth noting is that due to having to wait for ships to finish moving, part of
 the functionality of AIModule.PerformManeuver had to be split out to a callback
@@ -744,8 +779,8 @@ function, AIModule.ManeuverPostShipRest. This handles everything after the
 maneuver is executed, including calling the action submodule.
 
 It also includes various helper functions for searching through and transforming
-manveuvers.
-]]
+maneuvers. ]]
+
 function PerformAIManeuver(args)
     local ship = args.ship
     local take_action = args.take_action
@@ -753,9 +788,282 @@ function PerformAIManeuver(args)
     AIModule.PerformManeuver(ship, take_action)
 end
 
+AIModule.PerformFleeManeuver = function(ship, take_action)
+    print('Performing FLEE routine for ' .. ship.GetName(), color(1.0, 1.0, 0.2, 0.9))
+
+    AIModule.current_move.Reset()
+    AIModule.current_move.stress_count = TokenModule.GetShipTokenCount(ship, "Stress")
+    AIModule.current_move.take_action = take_action
+    local stress = AIModule.current_move.stress_count > 0
+    local ship_behaviour = BehaviourDB.GetRuleSet().GetShipBehaviour(ship)
+
+    -- Check for hyper jump behavior
+    local flee_table = ship_behaviour and ship_behaviour.flee_table
+    local hyper_table = flee_table and flee_table.hyper
+    local move_code = nil
+
+    -- Try hyper jump if no edge move was selected
+    if hyper_table then
+        print("in hyper_table loop")
+
+        -- First check if the edge of the board is within Range 2 firing arc
+        if AIModule.IsBoardEdgeInFrontArc(ship, 2) then
+            -- Fly straight at fastest speed
+            local max_speed = 5
+            move_code = nil
+
+            for speed = max_speed, 1, -1 do
+                local test_move = 's' .. speed
+                local difficulty = AIModule.GetMoveDifficulty(ship, test_move)
+                if difficulty and (not stress or difficulty ~= 'r') then
+                    move_code = test_move
+                    break
+                end
+            end
+        else
+            -- If not, then roll 2d2. There's a 50% chance that the ship will charge
+            -- a single token with each die roll. Once 3 tokens have been accumulated,
+            -- the ship jumps to hyperspace
+
+            local roll = math.random(1, 6)
+            -- Try lower rolls until we find a move
+            while move_code == nil and roll > 0 do
+                roll = roll - 1
+                move_code = hyper_table[roll]
+            end
+
+            -- If still no move found, use default flee behavior
+            if not move_code then
+                print('No valid hyperdrive move found, using default flee', color(1.0, 0.8, 0.2, 0.9))
+            end
+
+            local charge = ship.getVar("hyperCharge") or 0
+
+            -- Roll 2d2
+            local d1 = math.random(1, 2)
+            local d2 = math.random(1, 2)
+
+
+            local gained = 0
+            if d1 == 2 then gained = gained + 1 end
+            if d2 == 2 then gained = gained + 1 end
+            charge = charge + gained
+            printToAll(ship.GetName() .. ' rolled ' .. gained .. ' hits.', color(1.0, 1.0, 0.2, 0.9))
+            ship.setVar("hyperCharge", charge)
+
+            if charge > 2 then
+                printToAll(ship.GetName() .. ' jumps to hyperspace.', color(1.0, 1.0, 0.2, 0.9))
+                -- Move to edge of board
+                local edge_ahead = AIModule.FindBoardEdgeAhead(ship)
+
+                if edge_ahead then
+                    ship.setPositionSmooth(edge_ahead.point, false, true)
+                else
+                    print('Warning: Could not find edge ahead!', color(1.0, 0.2, 0.2, 0.9))
+                end
+                return
+            else
+                printToAll(ship.GetName() .. ' is preparing for hyperjump. Current charge: ' .. charge .. '/3.', color(1.0, 1.0, 0.2, 0.9))
+            end
+        end
+    end
+
+    -- Default behavior: head to nearest edge
+    if not move_code then
+        print('Using default flee behavior', color(1.0, 0.8, 0.2, 0.9))
+
+        -- Find the closest edge point
+        local nearest_edge = AIModule.FindNearestBoardEdgePoint(ship)
+
+        if nearest_edge then
+            -- Get rule set for arc calculation
+            local rule_set = BehaviourDB.GetRuleSet()
+
+            -- Calculate angle to edge point
+            local shipPos = ship.getPosition()
+            local shipRot = ship.GetRotation().y
+
+            -- Vector from ship to edge
+            local to_edge = {
+                nearest_edge.point.x - shipPos.x,
+                0,
+                nearest_edge.point.z - shipPos.z
+            }
+
+            -- Ship's forward vector
+            local ship_forward = Vect.RotateDeg({0, 0, -1}, shipRot)
+
+            -- Calculate angle between ship forward and edge direction
+            local angle_to_edge = Vect.AngleDeg(ship_forward, to_edge)
+
+            print("Raw angle to edge: " .. tostring(angle_to_edge))
+
+            -- If the ship is already moving roughly toward the edge (angle < 45 degrees),
+            -- just go straight instead of trying to navigate to it
+            if angle_to_edge < 45 then
+                print("Already facing edge, going straight")
+                -- Find the fastest straight move
+                local max_speed = 5
+                for speed = max_speed, 1, -1 do
+                    local test_move = 's' .. speed
+                    local difficulty = AIModule.GetMoveDifficulty(ship, test_move)
+                    if difficulty and (not stress or difficulty ~= 'r') then
+                        move_code = test_move
+                        break
+                    end
+                end
+
+                if move_code then
+                    print('Going straight at max speed: ' .. tostring(move_code), color(1.0, 0.8, 0.2, 0.9))
+                end
+            else
+                -- Ship needs to turn toward the edge
+                -- Use cross product to determine which side the edge is on
+                local cross = ship_forward[1] * to_edge[3] - ship_forward[3] * to_edge[1]
+
+                -- If cross product is POSITIVE, the edge is to the LEFT
+                -- If cross product is NEGATIVE, the edge is to the RIGHT
+                if cross > 0 then
+                    angle_to_edge = -math.abs(angle_to_edge)
+                else
+                    angle_to_edge = math.abs(angle_to_edge)
+                end
+
+                print("Final angle to nearest edge: " .. tostring(angle_to_edge))
+
+                -- Convert angle to arc using the rule set's function
+                local arc_info = rule_set.degreesToArc(angle_to_edge)
+                local target_arc = arc_info.target_arc
+
+                -- Track if we need to flip the move (target is on left side)
+                local is_left_side = string.find(target_arc, 'left')
+
+                -- Flip the arc if it's on the left (move tables only have right-side arcs)
+                if is_left_side then
+                    target_arc = rule_set.flipArc(target_arc)
+                    print("Flipped left arc to: " .. tostring(target_arc))
+                end
+
+                -- Get the range to the edge
+                local distance = Vect.Length(to_edge)
+                local range_band = math.floor(distance / Dim.Convert_mm_igu(100)) + 1
+
+                -- Determine range category (near/far/distant)
+                local range_category = 'distant'
+                if range_band <= 1 then
+                    range_category = 'near'
+                elseif range_band <= 2 then
+                    range_category = 'far'
+                end
+
+                if not ship_behaviour or not ship_behaviour.move_table then
+                    printToAll('ERROR: Ship has no behavior table for flee!', color(1.0, 0.2, 0.2, 0.9))
+                    return
+                end
+
+                -- Get the move table for this ship
+                local move_table = ship_behaviour.move_table
+
+                -- Look up the appropriate move - find the FASTEST valid move (excluding K-turns)
+                local candidate_moves = {}
+                if stress then
+                    local move_list = move_table[target_arc] and move_table[target_arc].stress
+                    if move_list then
+                        for _, m in ipairs(move_list) do
+                            table.insert(candidate_moves, m)
+                        end
+                    end
+                else
+                    local move_list = move_table[target_arc] and move_table[target_arc][range_category]
+                    if move_list then
+                        for _, m in ipairs(move_list) do
+                            table.insert(candidate_moves, m)
+                        end
+                    end
+                end
+
+                -- Find the fastest valid move from candidates, avoiding K-turns
+                local max_speed_found = 0
+                local best_non_kturn = nil
+                local best_kturn = nil
+
+                for _, candidate in ipairs(candidate_moves) do
+                    local difficulty = AIModule.GetMoveDifficulty(ship, candidate)
+                    if difficulty and (not stress or difficulty ~= 'r') then
+                        -- Extract speed from move code (e.g., "br3" -> 3, "s4" -> 4)
+                        local speed = tonumber(string.match(candidate, "%d+"))
+
+                        -- Check if this is a K-turn (starts with 'k')
+                        local is_kturn = string.sub(candidate, 1, 1) == 'k'
+
+                        if speed then
+                            if is_kturn then
+                                -- Track best K-turn as fallback
+                                if not best_kturn or speed > tonumber(string.match(best_kturn, "%d+")) then
+                                    best_kturn = candidate
+                                end
+                            else
+                                -- Prefer non-K-turn moves
+                                if speed > max_speed_found then
+                                    max_speed_found = speed
+                                    best_non_kturn = candidate
+                                end
+                            end
+                        end
+                    end
+                end
+
+                -- Use non-K-turn if available, otherwise fall back to K-turn
+                if best_non_kturn then
+                    move_code = best_non_kturn
+                    print("Selected non-K-turn move: " .. move_code)
+                elseif best_kturn then
+                    move_code = best_kturn
+                    print("No non-K-turn available, using K-turn: " .. move_code)
+                end
+
+                -- If target was on the left, flip the move from right to left
+                if move_code and is_left_side then
+                    -- Replace 'r' with 'l' in the move code (br2 -> bl2, tr3 -> tl3, etc.)
+                    move_code = string.gsub(move_code, 'r', 'l')
+                    print("Flipped move to left: " .. tostring(move_code))
+                end
+            end
+        end
+    end
+
+    -- Validate move and execute
+    if not move_code then
+        printToAll('No valid flee move found! Resorting to Straight 1.', color(1.0, 0.2, 0.2, 0.9))
+        move_code = 's1' -- Ultimate fallback
+    end
+
+    AIModule.current_move.move_code = move_code
+    AIModule.current_move.difficulty = AIModule.GetMoveDifficulty(ship, move_code) or 'w'
+
+    -- Remove stress on blue moves
+    if AIModule.current_move.difficulty == 'b' and stress then
+        DialModule.PerformAction(ship, 'Stress', ship.getVar('owningPlayer'), { ['remove'] = true })
+        AIModule.current_move.stress_count = AIModule.current_move.stress_count - 1
+    end
+
+    AIModule.current_move.in_progress = true
+    if MoveModule.PerformMove(move_code, ship, false, AIModule.ManeuverPostShipRest, true) == false then
+        AIModule.current_move.collision = true
+        AIModule.ManeuverPostShipRest(ship)
+    end
+end
+
 AIModule.PerformManeuver = function(ship, take_action)
     if AIModule.current_move.in_progress then
         printToAll("Can't perform AI maneuver while another ship is moving.", color(1.0, 1.0, 0.2, 0.9))
+        return
+    end
+
+    -- Check for fleeing state first, FleeManeuver requires some different logic.
+    local isFleeing = ship.getVar('isFleeing')
+    if isFleeing == true then
+        AIModule.PerformFleeManeuver(ship, take_action)
         return
     end
 
@@ -1154,7 +1462,7 @@ AIModule.PerformManeuver = function(ship, take_action)
 end
 
 AIModule.ManeuverPostShipRest = function(ship)
-    local action_selected = false;
+    local action_selected = false
 
     if AIModule.current_move.obstacle == 'debris_field' then
         DialModule.PerformAction(ship, 'Stress', ship.getVar("owningPlayer"))
@@ -1165,8 +1473,10 @@ AIModule.ManeuverPostShipRest = function(ship)
     if AIModule.current_move.difficulty == 'r' then
         DialModule.PerformAction(ship, 'Stress', ship.getVar("owningPlayer"))
     elseif AIModule.current_move.take_action == true and AIModule.current_move.stress_count == 0 and AIModule.current_move.collision == false and AIModule.current_move.obstacle == false then
-        if AIModule.current_move.is_ionised then
-            -- Ionised ships can only perform a focus action, if possible.
+
+        -- Ionised and fleeing ships can only perform a focus action
+        local focus_only = AIModule.current_move.is_ionised or ship.getVar('isFleeing')
+        if focus_only then
             for _, action in pairs(ship.getTable('Data')['actSet']) do
                 if action == 'F' then
                     table.insert(AIModule.current_move.action_stack, 'focus')
@@ -1176,9 +1486,8 @@ AIModule.ManeuverPostShipRest = function(ship)
             end
         else
             -- Check for Full Throttle and apply it now if appropriate.
+            -- Normal action selection
             AIModule.ApplySpecialAbility(ship, 'fullThrottle')
-
-            -- Run through the ship's actions and try them in order.
             action_selected = AIModule.SelectAction(ship)
         end
     end
@@ -1188,6 +1497,165 @@ AIModule.ManeuverPostShipRest = function(ship)
     else
         AIModule.current_move.in_progress = false
     end
+end
+
+-- Helper: Get board edges from playmat
+AIModule.GetBoardEdges = function()
+    local playmat = getObjectFromGUID(AIModule.HOTAC_MAT_GUID)
+    if not playmat then
+        for _, obj in ipairs(getAllObjects()) do
+            if obj.getVar('__XW_Mat') then
+                playmat = obj
+                break
+            end
+        end
+    end
+
+    if not playmat then
+        return nil
+    end
+
+    local bounds = playmat.getBounds()
+    local center = bounds.center
+    local halfSize = bounds.size * 0.5
+
+    return {
+        left   = center.x - halfSize.x,
+        right  = center.x + halfSize.x,
+        top    = center.z + halfSize.z,
+        bottom = center.z - halfSize.z,
+        center = center
+    }
+end
+
+-- Helper: Find board edge point directly ahead of ship
+AIModule.FindBoardEdgeAhead = function(ship)
+    local edges = AIModule.GetBoardEdges()
+    if not edges then
+        return nil
+    end
+
+    local shipPos = ship.getPosition()
+    local ship_facing = Vect.RotateDeg({ 0, 0, -1 }, ship.GetRotation().y)
+
+    -- Project forward and find which edge we hit first
+    local best_t = math.huge
+    local edge_point = nil
+    local epsilon = 0.0001
+
+    -- Check X edges (left/right)
+    if math.abs(ship_facing[1]) > epsilon then
+        local target_edge = ship_facing[1] < 0 and edges.left or edges.right
+        local t = (target_edge - shipPos.x) / ship_facing[1]
+        if t > 0 and t < best_t then
+            best_t = t
+            edge_point = Vector(
+                shipPos.x + ship_facing[1] * t,
+                shipPos.y,
+                shipPos.z + ship_facing[3] * t)
+        end
+    end
+
+    -- Check Z edges (top/bottom)
+    if math.abs(ship_facing[3]) > epsilon then
+        local target_edge = ship_facing[3] < 0 and edges.bottom or edges.top
+        local t = (target_edge - shipPos.z) / ship_facing[3]
+        if t > 0 and t < best_t then
+            best_t = t
+            edge_point = Vector(
+                shipPos.x + ship_facing[1] * t,
+                shipPos.y,
+                shipPos.z + ship_facing[3] * t)
+        end
+    end
+
+    return edge_point and { point = edge_point } or nil
+end
+
+-- Helper: Find nearest board edge point
+AIModule.FindNearestBoardEdgePoint = function(ship)
+    local edges = AIModule.GetBoardEdges()
+    if not edges then
+        return nil
+    end
+
+    local shipPos = ship.getPosition()
+
+    -- Calculate closest point on each edge
+    local edge_candidates = {
+        { name = "left",   point = Vector(edges.left, shipPos.y, shipPos.z) },
+        { name = "right",  point = Vector(edges.right, shipPos.y, shipPos.z) },
+        { name = "top",    point = Vector(shipPos.x, shipPos.y, edges.top) },
+        { name = "bottom", point = Vector(shipPos.x, shipPos.y, edges.bottom) }
+    }
+
+    -- Find the nearest edge
+    local nearest = nil
+    local min_distance = math.huge
+
+    for _, candidate in ipairs(edge_candidates) do
+        local distance = math.sqrt(
+            (candidate.point.x - shipPos.x)^2 +
+            (candidate.point.z - shipPos.z)^2
+        )
+
+        if distance < min_distance then
+            min_distance = distance
+            nearest = {
+                point = candidate.point,
+                edge_name = candidate.name,
+                distance = distance
+            }
+        end
+    end
+
+    return nearest
+end
+
+-- Helper: Check if board edge is in front arc
+AIModule.IsBoardEdgeInFrontArc = function(ship, max_range)
+    max_range = max_range or 2
+
+    local edge_ahead = AIModule.FindBoardEdgeAhead(ship)
+    if not edge_ahead then
+        return false
+    end
+
+    local shipPos = ship.getPosition()
+
+    -- Create proper vector as table for Vect functions
+    local ship_to_edge = {
+        edge_ahead.point.x - shipPos.x,
+        edge_ahead.point.y - shipPos.y,
+        edge_ahead.point.z - shipPos.z
+    }
+
+    -- Calculate distance to edge point
+    local distance = Vect.Length(ship_to_edge)
+    local range_band = math.floor(distance / Dim.Convert_mm_igu(100)) + 1
+
+    -- Check if edge is in front and within range
+    local ship_facing = Vect.RotateDeg({ 0, 0, -1 }, ship.GetRotation().y)
+
+    -- Normalize ship_to_edge vector manually
+    local edge_length = Vect.Length(ship_to_edge)
+    local normalized_edge = {
+        ship_to_edge[1] / edge_length,
+        ship_to_edge[2] / edge_length,
+        ship_to_edge[3] / edge_length
+    }
+
+    -- Calculate dot product manually
+    local dot_product = ship_facing[1] * normalized_edge[1] +
+                       ship_facing[2] * normalized_edge[2] +
+                       ship_facing[3] * normalized_edge[3]
+
+    -- Clamp dot product to [-1, 1] to avoid NaN from acos
+    dot_product = math.max(-1, math.min(1, dot_product))
+
+    local angle = math.deg(math.acos(dot_product))
+
+    return angle < 90 and range_band >= 1 and range_band <= max_range
 end
 
 --[[ AIModule.GetMoveDifficulty

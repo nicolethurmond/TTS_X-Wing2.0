@@ -582,6 +582,10 @@ function onSave()
     state.tokenData = { tokens = {} }
     state.owningPlayer = self.getVar("owningPlayer")
     state.isAi = self.getVar("isAi")
+    if state.isAi then
+        state.isFleeing = self.getVar('isFleeing')
+        state.hyperCharge = self.getVar("hyperCharge")
+    end
     state.strikeTargets = self.getTable("StrikeTargets")
     state.uiData = self.getTable("UiData")
 
@@ -610,6 +614,10 @@ function onLoad(savedData)
         self.setVar("finished_setup", state.finishedSetup)
         self.setVar("owningPlayer", state.owningPlayer)
         self.setVar("isAi", state.isAi)
+        if state.isAi then
+            self.setVar("isFleeing", state.isFleeing or false)
+            self.setVar("hyperCharge", state.hyperCharge or 0)
+        end
         self.setTable("StrikeTargets", state.strikeTargets)
         self.interactable = state.interactable or false
         for _, guid in ipairs(state.tokenData.tokens) do
