@@ -586,6 +586,10 @@ function onSave()
     state.hullValue = self.getVar("hullValue")
     state.shieldValue = self.getVar("shieldValue")
     state.hasHPTracking = self.getVar("hasHPTracking")
+    if state.isAi then
+        state.isFleeing = self.getVar('isFleeing')
+        state.hyperCharge = self.getVar("hyperCharge")
+    end
     state.strikeTargets = self.getTable("StrikeTargets")
     state.uiData = self.getTable("UiData")
 
@@ -619,6 +623,10 @@ function onLoad(savedData)
         self.setVar("hasHPTracking", state.hasHPTracking)
         if state.hasHPTracking then
             Global.call("HPTrackingModule_SpawnButtons", self)
+        end
+        if state.isAi then
+            self.setVar("isFleeing", state.isFleeing or false)
+            self.setVar("hyperCharge", state.hyperCharge or 0)
         end
         self.setTable("StrikeTargets", state.strikeTargets)
         self.interactable = state.interactable or false
