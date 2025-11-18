@@ -131,10 +131,11 @@ end
 arc_indicators = {}
 
 function DisableAttachedColliders()
-    --print("DisableAttachedColliders: " .. self.getName())
     for _, child in ipairs(self.getChildren()) do
-        --print("Child ".. tostring(i)..":" .. child.name)
-        if child.name ~= "New Game Object" then -- The compounded collission mesh seems to be named this.
+        -- Skip UI-related children that might interfere with buttons
+        if child.name ~= "New Game Object" and
+           child.name ~= "XmlUIWorldCanvas(Clone)" and
+           child.name ~= "LuaPanel" then
             DisableColliderInComponent(child, " ")
         end
     end
@@ -582,6 +583,9 @@ function onSave()
     state.tokenData = { tokens = {} }
     state.owningPlayer = self.getVar("owningPlayer")
     state.isAi = self.getVar("isAi")
+    state.hullValue = self.getVar("hullValue")
+    state.shieldValue = self.getVar("shieldValue")
+    state.hasHPTracking = self.getVar("hasHPTracking")
     if state.isAi then
         state.isFleeing = self.getVar('isFleeing')
         state.hyperCharge = self.getVar("hyperCharge")
@@ -614,10 +618,6 @@ function onLoad(savedData)
         self.setVar("finished_setup", state.finishedSetup)
         self.setVar("owningPlayer", state.owningPlayer)
         self.setVar("isAi", state.isAi)
-        if state.isAi then
-            self.setVar("isFleeing", state.isFleeing or false)
-            self.setVar("hyperCharge", state.hyperCharge or 0)
-        end
         self.setTable("StrikeTargets", state.strikeTargets)
         self.interactable = state.interactable or false
         for _, guid in ipairs(state.tokenData.tokens) do

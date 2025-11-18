@@ -340,6 +340,8 @@ XW_cmd.Process = function(obj, cmd)
         DialModule.PerformAction(obj, cmd)
     elseif type == 'bombDrop' then
         BombModule.ToggleDrop(obj, cmd)
+    elseif type == 'toggleHP' then
+        HPTrackingModule.ToggleHpTracking(obj, cmd)
     elseif type == 'StrikeAI' then
         AIModule.EnableStrikeAI(obj, cmd)
     elseif type == 'AI' then
@@ -419,6 +421,7 @@ XW_cmd.AddCommand('a[12]', 'actionMove')        -- Adjusts
 
 XW_cmd.AddCommand('name[ *]*[-a-zA-Z" %d]*', 'renameShip')
 XW_cmd.AddCommand('init[ ]?[01234567]', 'changeInitiative')
+XW_cmd.AddCommand('[hH][pP]', 'toggleHP')
 
 -- AI Module:
 debug_AI = false
@@ -6200,6 +6203,247 @@ end
 -- END DIRECT TTS EVENT HANDLING
 --------
 
+
+--------
+-- HP TRACKING MODULE
+-- Manual hull/shield tracking for any ship
+
+HPTrackingModule = {}
+
+HPTrackingModule.ToggleHpTracking = function(ship, command)
+    if ship.getVar("hasHPTracking") then
+        HPTrackingModule.RemoveButtons(ship)
+    else
+        HPTrackingModule.SpawnButtons(ship)
+    end
+end
+
+HPTrackingModule.SpawnButtons = function(ship)
+    HPTrackingModule.RemoveButtons(ship)
+
+    -- Initialize values if not set
+    if not ship.getVar("hullValue") then
+        local data = ship.getTable("Data")
+        ship.setVar("hullValue", data and data.Hull or 3)
+    end
+    if not ship.getVar("shieldValue") then
+        local data = ship.getTable("Data")
+        ship.setVar("shieldValue", data and data.Shield or 0)
+    end
+
+    -- Create +/- buttons (these stay static)
+    local increaseHullButton = {
+        click_function = 'HP_increaseHull',
+        label = '+',
+        rotation = {0,0,0},
+        width = 150,
+        height = 150,
+        font_size = 75,
+        color = {1,1,1},
+        font_color = {0,0,0}
+    }
+
+    local decreaseHullButton = {
+        click_function = 'HP_decreaseHull',
+        label = '-',
+        rotation = {0,0,0},
+        width = 150,
+        height = 150,
+        font_size = 75,
+        color = {1,1,1},
+        font_color = {0,0,0}
+    }
+
+    local increaseShieldButton = {
+        click_function = 'HP_increaseShield',
+        label = '+',
+        rotation = {0,0,0},
+        width = 150,
+        height = 150,
+        font_size = 75,
+        color = {1,1,1},
+        font_color = {0,0,0}
+    }
+
+    local decreaseShieldButton = {
+        click_function = 'HP_decreaseShield',
+        label = '-',
+        rotation = {0,0,0},
+        width = 150,
+        height = 150,
+        font_size = 75,
+        color = {1,1,1},
+        font_color = {0,0,0}
+    }
+
+    local size = ship.getTable("Data").Size or 'small'
+
+    if size == 'large' then
+        increaseHullButton.position = {-0.6, 1.0, 0.5}
+        decreaseHullButton.position = {-0.6, 1.0, 1.5}
+        increaseShieldButton.position = {0.6, 1.0, 0.5}
+        decreaseShieldButton.position = {0.6, 1.0, 1.5}
+    elseif size == 'medium' then
+        increaseHullButton.position = {-0.6, 1.0, 0.1}
+        decreaseHullButton.position = {-0.6, 1.0, 1.1}
+        increaseShieldButton.position = {0.6, 1.0, 0.1}
+        decreaseShieldButton.position = {0.6, 1.0, 1.1}
+    else
+        increaseHullButton.position = {-0.36, 1.0, -0.49}
+        decreaseHullButton.position = {-0.36, 1.0, 0.49}
+        increaseShieldButton.position = {0.36, 1.0, -0.49}
+        decreaseShieldButton.position = {0.36, 1.0, .49}
+    end
+
+    ship.createButton(increaseHullButton)
+    ship.createButton(decreaseHullButton)
+    ship.createButton(increaseShieldButton)
+    ship.createButton(decreaseShieldButton)
+
+    -- Create the display buttons
+    HPTrackingModule.recreateDisplays(ship)
+
+    ship.setVar("hasHPTracking", true)
+end
+
+HPTrackingModule.RemoveButtons = function(ship)
+    local buttons = ship.getButtons()
+    if buttons ~= nil then
+        local indices_to_remove = {}
+        for k, but in pairs(buttons) do
+            if but.click_function == 'HP_increaseHull' or
+                but.click_function == 'HP_decreaseHull' or
+                but.click_function == 'HP_increaseShield' or
+                but.click_function == 'HP_decreaseShield' or
+                but.click_function == 'HP_noop' then
+                table.insert(indices_to_remove, but.index)
+            end
+        end
+        table.sort(indices_to_remove, function(a, b) return a > b end)
+        for _, index in ipairs(indices_to_remove) do
+            ship.removeButton(index)
+        end
+    end
+        -- Remove inputs
+    ship.clearInputs()
+
+    ship.setVar("hasHPTracking", false)
+end
+
+-- Click handlers
+function HPTrackingModule.recreateDisplays(ship)
+    -- Remove both old displays
+    local buttons = ship.getButtons()
+    for _, but in ipairs(buttons) do
+        if but.click_function == 'HP_noop' then
+            ship.removeButton(but.index)
+        end
+    end
+
+    ship.clearInputs()
+
+    local hull = ship.getVar("hullValue") or 0
+    local shield = ship.getVar("shieldValue") or 0
+    local size = ship.getTable("Data").Size or 'small'
+
+    local hullInput = {
+        input_function = 'HP_setHull',
+        function_owner = Global,
+        label = '',
+        alignment = 3,  -- Center
+        value = tostring(hull),
+        validation = 2,  -- Integer only
+        width = 350,
+        height = 350,
+        font_size = 175,
+        color = {0,0,0},
+        font_color = {0.9, 0.25, 0.25}
+    }
+
+    local shieldInput = {
+        input_function = 'HP_setShield',
+        function_owner = Global,
+        label = '',
+        alignment = 3,
+        value = tostring(shield),
+        validation = 2,  -- Integer only
+        width = 350,
+        height = 350,
+        font_size = 175,
+        color = {0,0,0},
+        font_color = {0.2, 0.6, 1}
+    }
+
+    if size == 'large' then
+        hullInput.position = {-0.6, 1.0, 1}
+        shieldInput.position = {0.6, 1.0, 1}
+    elseif size == 'medium' then
+        hullInput.position = {-0.6, 1.0, 0.6}
+        shieldInput.position = {0.6, 1.0, 0.6}
+    else
+        hullInput.position = {-0.36, 1.0, -0.01}
+        shieldInput.position = {0.36, 1.0, -0.01}
+    end
+
+    ship.createInput(hullInput)
+    ship.createInput(shieldInput)
+end
+
+-- New input handlers (in Global scope)
+function HP_setHull(ship, player_color, input_value, selected)
+    if not selected then
+        return  -- Don't process until user is done editing
+    end
+    local value = tonumber(input_value)
+    if value and value >= 0 then
+        ship.setVar("hullValue", value)
+    end
+end
+
+function HP_setShield(ship, player_color, input_value, selected)
+    if not selected then
+        return  -- Don't process until user is done editing
+    end
+    local value = tonumber(input_value)
+    if value and value >= 0 then
+        ship.setVar("shieldValue", value)
+    end
+end
+
+function HP_increaseHull(ship)
+    local hull = ship.getVar("hullValue") or 0
+    ship.setVar("hullValue", hull + 1)
+    HPTrackingModule.recreateDisplays(ship)
+end
+
+function HP_decreaseHull(ship)
+    local hull = ship.getVar("hullValue") or 0
+    ship.setVar("hullValue", math.max(0, hull - 1))
+    HPTrackingModule.recreateDisplays(ship)
+end
+
+function HP_increaseShield(ship)
+    local shield = ship.getVar("shieldValue") or 0
+    ship.setVar("shieldValue", shield + 1)
+    HPTrackingModule.recreateDisplays(ship)
+end
+
+function HP_decreaseShield(ship)
+    local shield = ship.getVar("shieldValue") or 0
+    ship.setVar("shieldValue", math.max(0, shield - 1))
+    HPTrackingModule.recreateDisplays(ship)
+end
+
+function HP_noop(ship)
+end
+
+-- Global API wrapper for onLoad
+function HPTrackingModule_SpawnButtons(ship)
+    HPTrackingModule.SpawnButtons(ship)
+end
+
+-- END HP TRACKING MODULE
+--------
 
 --------
 -- COLLISION CHECKING MODULE
