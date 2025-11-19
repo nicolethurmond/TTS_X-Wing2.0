@@ -5862,7 +5862,7 @@ HPTrackingModule.RemoveButtons = function(ship)
     ship.setVar("hasHPTracking", false)
 end
 
--- Click handlers
+-- HPTracking Click handlers
 function HPTrackingModule.recreateDisplays(ship)
     -- Remove both old displays
     local buttons = ship.getButtons()
@@ -5887,9 +5887,9 @@ function HPTrackingModule.recreateDisplays(ship)
         validation = 2,  -- Integer only
         width = 350,
         height = 350,
-        font_size = 175,
+        font_size = 325,
         color = {0,0,0},
-        font_color = {0.9, 0.25, 0.25}
+        font_color = {1, 0.7, 0.1}
     }
 
     local shieldInput = {
@@ -5901,9 +5901,9 @@ function HPTrackingModule.recreateDisplays(ship)
         validation = 2,  -- Integer only
         width = 350,
         height = 350,
-        font_size = 175,
+        font_size = 325,
         color = {0,0,0},
-        font_color = {0.2, 0.6, 1}
+        font_color = {0.1, 0.8, 1}
     }
 
     if size == 'large' then
@@ -5921,7 +5921,7 @@ function HPTrackingModule.recreateDisplays(ship)
     ship.createInput(shieldInput)
 end
 
--- New input handlers (in Global scope)
+-- HPTracking Input Handlers
 function HP_setHull(ship, player_color, input_value, selected)
     if not selected then
         return  -- Don't process until user is done editing
