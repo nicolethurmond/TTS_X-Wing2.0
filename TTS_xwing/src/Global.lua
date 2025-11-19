@@ -5928,7 +5928,9 @@ function HP_setHull(ship, player_color, input_value, selected)
     end
     local value = tonumber(input_value)
     if value and value >= 0 then
+        local prev_hull = ship.getVar("hullValue")
         ship.setVar("hullValue", value)
+        printToAll(player_color .. ' modified ' .. ship.getName() .. '\'s hull: ' .. prev_hull .. ' -> ' .. value, {1, 0.6, 0.2})
     end
 end
 
@@ -5938,33 +5940,40 @@ function HP_setShield(ship, player_color, input_value, selected)
     end
     local value = tonumber(input_value)
     if value and value >= 0 then
+        local prev_shield = ship.getVar("shieldValue")
         ship.setVar("shieldValue", value)
+        printToAll(player_color .. ' modified ' .. ship.getName() .. '\'s shield: ' .. prev_shield .. ' -> ' .. value, {1, 0.6, 0.2})
     end
 end
 
-function HP_increaseHull(ship)
+function HP_increaseHull(ship, player_color)
     local hull = ship.getVar("hullValue") or 0
     ship.setVar("hullValue", hull + 1)
+    printToAll(player_color .. ' increased ' .. ship.getName() .. '\'s hull: ' .. hull .. ' -> ' .. hull + 1, {1, 0.9, 0.4})
     HPTrackingModule.recreateDisplays(ship)
 end
 
-function HP_decreaseHull(ship)
+function HP_decreaseHull(ship, player_color)
     local hull = ship.getVar("hullValue") or 0
     ship.setVar("hullValue", math.max(0, hull - 1))
+    printToAll(player_color .. ' decreased ' .. ship.getName() .. '\'s hull: ' .. hull .. ' -> ' .. math.max(0, hull - 1), {1, 0.9, 0.4})
     HPTrackingModule.recreateDisplays(ship)
 end
 
-function HP_increaseShield(ship)
+function HP_increaseShield(ship, player_color)
     local shield = ship.getVar("shieldValue") or 0
     ship.setVar("shieldValue", shield + 1)
+    printToAll(player_color .. ' increased ' .. ship.getName() .. '\'s shield: ' .. shield .. ' -> ' .. shield + 1, {1, 0.9, 0.4})
     HPTrackingModule.recreateDisplays(ship)
 end
 
-function HP_decreaseShield(ship)
+function HP_decreaseShield(ship, player_color)
     local shield = ship.getVar("shieldValue") or 0
     ship.setVar("shieldValue", math.max(0, shield - 1))
+    printToAll(player_color .. ' decreased ' .. ship.getName() .. '\'s shield: ' .. shield .. ' -> ' .. math.max(0, shield - 1), {1, 0.9, 0.4})
     HPTrackingModule.recreateDisplays(ship)
 end
+
 
 function HP_noop(ship)
 end
