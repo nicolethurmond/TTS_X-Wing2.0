@@ -1461,6 +1461,7 @@ BehaviourDB.rule_sets[1].ships['z95af4headhunter'].factions[1].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['z95af4headhunter'].factions[1].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl2', [2] = 'br2', [3] = 's2', [5] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['z95af4headhunter'].factions[1].action_selection = {
@@ -1540,6 +1541,7 @@ BehaviourDB.rule_sets[1].ships['t65xwing'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['t65xwing'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 's1', [3] = 'bl1', [4] = 'br1', [5] = 's2' }
 }
 BehaviourDB.rule_sets[1].ships['t65xwing'].action_selection = {
@@ -1619,6 +1621,7 @@ BehaviourDB.rule_sets[1].ships['btla4ywing'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['btla4ywing'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 's1', [2] = 'bl1', [4] = 'br1', [6] = 's2' }
 }
 BehaviourDB.rule_sets[1].ships['btla4ywing'].action_selection = {
@@ -1703,6 +1706,7 @@ BehaviourDB.rule_sets[1].ships['rz1awing'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['rz1awing'].flee_table = {
     edge = { bullseye = 's5' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl2', [2] = 'br2', [3] = 's4', [5] = 's5' }
 }
 BehaviourDB.rule_sets[1].ships['rz1awing'].action_selection = {
@@ -1799,6 +1803,7 @@ BehaviourDB.rule_sets[1].ships['asf01bwing'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['asf01bwing'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 's1', [3] = 'bl1', [4] = 'br1', [5] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['asf01bwing'].action_selection = {
@@ -1878,6 +1883,7 @@ BehaviourDB.rule_sets[1].ships['yt2400lightfreighter'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['yt2400lightfreighter'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl1', [3] = 'br1', [4] = 's1', [5] = 's2' }
 }
 BehaviourDB.rule_sets[1].ships['yt2400lightfreighter'].action_selection = {
@@ -1945,6 +1951,7 @@ BehaviourDB.rule_sets[1].ships['modifiedyt1300lightfreighter'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['modifiedyt1300lightfreighter'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl2', [2] = 'br2', [3] = 's2', [5] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['modifiedyt1300lightfreighter'].action_selection = {
@@ -2012,6 +2019,7 @@ BehaviourDB.rule_sets[1].ships['vcx100lightfreighter'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['vcx100lightfreighter'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 3 },
     hyper = { [1] = 's1', [2] = 'bl2', [4] = 'br2', [6] = 's2' }
 }
 BehaviourDB.rule_sets[1].ships['vcx100lightfreighter'].action_selection = {
@@ -2630,6 +2638,7 @@ BehaviourDB.rule_sets[1].ships['z95af4headhunter'].factions[3].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['z95af4headhunter'].factions[3].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl2', [2] = 'br2', [3] = 's2', [5] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['z95af4headhunter'].factions[3].action_selection = {
@@ -2692,6 +2701,7 @@ BehaviourDB.rule_sets[1].ships['m3ainterceptor'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['m3ainterceptor'].flee_table = {
     edge = { bullseye = 's5' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl1', [3] = 'br1', [5] = 's2', [6] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['m3ainterceptor'].action_selection = {
@@ -2759,6 +2769,7 @@ BehaviourDB.rule_sets[1].ships['kihraxzfighter'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['kihraxzfighter'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl2', [3] = 'br2', [5] = 's2', [6] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['kihraxzfighter'].action_selection = {
@@ -2836,6 +2847,7 @@ BehaviourDB.rule_sets[1].ships['starviperclassattackplatform'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['starviperclassattackplatform'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl2', [2] = 'br2', [3] = 's2', [5] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['starviperclassattackplatform'].action_selection = {
@@ -2929,6 +2941,7 @@ BehaviourDB.rule_sets[1].ships['fangfighter'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['fangfighter'].flee_table = {
     edge = { bullseye = 's5' },
+    health = { threshold = 2 },
     hyper = { [1] = 'tl2', [2] = 'tr2', [3] = 'bl2', [5] = 'br2' }
 }
 BehaviourDB.rule_sets[1].ships['fangfighter'].action_selection = {
@@ -3021,6 +3034,7 @@ BehaviourDB.rule_sets[1].ships['hwk290lightfreighter'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['hwk290lightfreighter'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { threshold = 2 },
     hyper = { [1] = 'bl1', [2] = 'br1', [3] = 's2', [5] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['hwk290lightfreighter'].action_selection = {
@@ -3106,6 +3120,7 @@ BehaviourDB.rule_sets[1].ships['firesprayclasspatrolcraft'].move_table = {
 }
 BehaviourDB.rule_sets[1].ships['firesprayclasspatrolcraft'].flee_table = {
     edge = { bullseye = 's4' },
+    health = { '3' },
     hyper = { [1] = 'bl1', [2] = 'br1', [3] = 's2', [5] = 's3' }
 }
 BehaviourDB.rule_sets[1].ships['firesprayclasspatrolcraft'].action_selection = {

@@ -6387,6 +6387,18 @@ function HPTrackingModule.recreateDisplays(ship)
 
     ship.createInput(hullInput)
     ship.createInput(shieldInput)
+
+    -- Detect if the ship has lost enough health to trigger flee
+    local ship_behaviour = BehaviourDB.GetRuleSet().GetShipBehaviour(ship)
+    local health_table = ship_behaviour and ship_behaviour.flee_table and ship_behaviour.flee_table.health
+    if health_table then
+        local threshold = health_table['threshold']
+        local current_health = hull + shield
+        if current_health <= tonumber(threshold) then
+            ship.setVar('isFleeing', true)
+            printToAll(ship.getName() .. " is now FLEEING!", color(1.0, 1.0, 0.2, 0.9))
+        end
+    end
 end
 
 -- HPTracking Input Handlers
